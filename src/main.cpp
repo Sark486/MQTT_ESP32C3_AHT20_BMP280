@@ -14,19 +14,12 @@ extern "C" {
 #include <Wire.h>
 #include <Fonts/FreeSerif9pt7b.h>
 
-#define WIFI_SSID ""
-#define WIFI_PASSWORD ""
+#include "secrets.h"
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define SCREEN_HEIGHT 32 // OLED display height, in pixels
 
-
-// Raspberry Pi Mosquitto MQTT Broker
-#define MQTT_HOST IPAddress(127, 0, 0, 1)
-// For a cloud MQTT broker, type the domain name
-// #define MQTT_HOST "raspi"
-#define MQTT_PORT 1883
 
 // // Temperature MQTT Topics
 // #define MQTT_PUB_TEMP "sentinel/devices/pi_internal/telemetry"
@@ -56,7 +49,7 @@ void connectToWifi() {
   WiFi.mode(WIFI_STA);
   // Lowering WiFI power due to cheap ESP32C3 mini used; They can't handle power spikes well; Works without it on better board
   WiFi.setTxPower(WIFI_POWER_8_5dBm);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.begin(SECRET_WIFI_SSID, SECRET_WIFI_PASSWORD);
 }
 
 void connectToMqtt() {
@@ -135,7 +128,7 @@ void setup() {
   //mqttClient.onSubscribe(onMqttSubscribe);
   //mqttClient.onUnsubscribe(onMqttUnsubscribe);
   mqttClient.onPublish(onMqttPublish);
-  mqttClient.setServer(MQTT_HOST, MQTT_PORT);
+  mqttClient.setServer(SECRET_MQTT_HOST, SECRET_MQTT_PORT);
   // If your broker requires authentication (username and password), set them below
   //mqttClient.setCredentials("REPlACE_WITH_YOUR_USER", "REPLACE_WITH_YOUR_PASSWORD");
   connectToWifi();
