@@ -14,15 +14,7 @@ extern "C" {
 #include <Wire.h>
 #include <Fonts/FreeSerif9pt7b.h>
 
-#include "secrets.h"
-
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
-// #define SCREEN_HEIGHT 32 // OLED display height, in pixels
-
-
-// // Temperature MQTT Topics
-// #define MQTT_PUB_TEMP "sentinel/devices/pi_internal/telemetry"
+#include "config.h"
 
 String deviceId = "";
 
@@ -31,7 +23,6 @@ TimerHandle_t mqttReconnectTimer;
 TimerHandle_t wifiReconnectTimer;
 
 unsigned long previousMillis = 0;   // Stores last time temperature was published
-const long interval = 60000;        // Interval at which to publish sensor readings
 
 
 Adafruit_AHTX0 aht;
@@ -41,14 +32,14 @@ Adafruit_BMP280 bmp; // use I2C interface
 Adafruit_Sensor *bmp_temp = bmp.getTemperatureSensor();
 Adafruit_Sensor *bmp_pressure = bmp.getPressureSensor();
 
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
 
 void connectToWifi() {
   Serial.println("Connecting to Wi-Fi...");
   // Explicitly set the mode
   WiFi.mode(WIFI_STA);
   // Lowering WiFI power due to cheap ESP32C3 mini used; They can't handle power spikes well; Works without it on better board
-  WiFi.setTxPower(WIFI_POWER_8_5dBm);
+  WiFi.setTxPower(WIFI_TX_POWER);
   WiFi.begin(SECRET_WIFI_SSID, SECRET_WIFI_PASSWORD);
 }
 
@@ -107,18 +98,18 @@ void onMqttPublish(uint16_t packetId) {
 }
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(SERIAL_BAUD);
   Serial.println();
 
-  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3D for 128x64
+  if(!display.begin(SSD1306_SWITCHCAPVCC, SSD1306_I2C_ADDR)) {
     Serial.println(F("SSD1306 allocation failed"));
     for(;;);
   }
 
   // dht.begin();
   Serial.println("Setup begin");
-  mqttReconnectTimer = xTimerCreate("mqttTimer", pdMS_TO_TICKS(2000), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToMqtt));
-  wifiReconnectTimer = xTimerCreate("wifiTimer", pdMS_TO_TICKS(2000), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToWifi));
+  mqttReconnectTimer = xTimerCreate("mqttTimer", pdMS_TO_TICKS(RECONNECT_DELAY_MS), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToMqtt));
+  wifiReconnectTimer = xTimerCreate("wifiTimer", pdMS_TO_TICKS(RECONNECT_DELAY_MS), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToWifi));
 
   WiFi.onEvent(WiFiEvent);
   deviceId = WiFi.macAddress();
@@ -149,7 +140,7 @@ void setup() {
 
   unsigned status;
   //status = bmp.begin(BMP280_ADDRESS_ALT, BMP280_CHIPID);
-  status = bmp.begin();
+  status = bmp.begin(BMP280_I2C_ADDR);
   if (!status) {
     Serial.println(F("Could not find a valid BMP280 sensor, check wiring or "
                       "try a different address!"));
@@ -165,7 +156,7 @@ void setup() {
 void loop() {
   unsigned long currentMillis = millis();
   // it publishes a new MQTT message
-  if (currentMillis - previousMillis >= interval || previousMillis == 0) {
+  if (currentMillis - previousMillis >= PUBLISH_INTERVAL_MS || previousMillis == 0) {
 
     if (WiFi.status() == WL_CONNECTED) {
         long rssi = WiFi.RSSI();
@@ -219,8 +210,8 @@ void loop() {
     serializeJson(doc, payload);
     
     // Publish an MQTT message on topic esp32/dht/temperature
-    String topic = "sentinel/devices/" + deviceId + "/telemetry";
-    uint16_t packetIdPub1 = mqttClient.publish(topic.c_str(), 1, false, payload);                            
+    String topic = MQTT_TOPIC_PREFIX + deviceId + "/telemetry";
+    uint16_t packetIdPub1 = mqttClient.publish(topic.c_str(), MQTT_QOS, false, payload);                            
     Serial.printf("Publishing on topic %s at QoS 1, packetId: %i\n", topic.c_str(), packetIdPub1);
     Serial.printf("Message: %.2f \n", temp_event.temperature);
       display.clearDisplay();
