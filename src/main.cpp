@@ -35,7 +35,7 @@ Adafruit_Sensor *bmp_pressure = bmp.getPressureSensor();
 Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
 
 void connectToWifi() {
-  Serial.println("Connecting to Wi-Fi...");
+  Serial.println(F("[net] connecting to Wi-Fi..."));
   // Explicitly set the mode
   WiFi.mode(WIFI_STA);
   // Lowering WiFI power due to cheap ESP32C3 mini used; They can't handle power spikes well; Works without it on better board
@@ -44,21 +44,19 @@ void connectToWifi() {
 }
 
 void connectToMqtt() {
-  Serial.println("Connecting to MQTT...");
+  Serial.println(F("[net] connecting to MQTT..."));
   mqttClient.connect();
 }
 
 void WiFiEvent(WiFiEvent_t event) {
-  Serial.printf("[WiFi-event] event: %d\n", event);
   switch(event) {
     case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-      Serial.println("WiFi connected");
-      Serial.println("IP address: ");
+      Serial.print(F("[net] Wi-Fi connected, IP address: "));
       Serial.println(WiFi.localIP());
       connectToMqtt();
       break;
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-      Serial.println("WiFi lost connection");
+      Serial.println(F("[net] Wi-Fi lost connection"));
       xTimerStop(mqttReconnectTimer, 0); // ensure we don't reconnect to MQTT while reconnecting to Wi-Fi
       xTimerStart(wifiReconnectTimer, 0);
       break;
@@ -66,13 +64,11 @@ void WiFiEvent(WiFiEvent_t event) {
 }
 
 void onMqttConnect(bool sessionPresent) {
-  Serial.println("Connected to MQTT.");
-  Serial.print("Session present: ");
-  Serial.println(sessionPresent);
+  Serial.printf("[net] connected to MQTT (session present: %d)\n", sessionPresent);
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
-  Serial.println("Disconnected from MQTT.");
+  Serial.println(F("[net] disconnected from MQTT"));
   if (WiFi.isConnected()) {
     xTimerStart(mqttReconnectTimer, 0);
   }
@@ -92,22 +88,24 @@ void onMqttUnsubscribe(uint16_t packetId) {
 }*/
 
 void onMqttPublish(uint16_t packetId) {
-  Serial.print("Publish acknowledged.");
-  Serial.print("  packetId: ");
-  Serial.println(packetId);
+  Serial.printf("[net] publish acknowledged, packetId: %u\n", packetId);
 }
 
 void setup() {
   Serial.begin(SERIAL_BAUD);
+  const uint32_t deadline = millis() + SERIAL_READY_TIMEOUT_MS;
+  while (!Serial && millis() < deadline) {
+    delay(10);
+  }
   Serial.println();
+  Serial.println(F("[main] booting"));
 
   if(!display.begin(SSD1306_SWITCHCAPVCC, SSD1306_I2C_ADDR)) {
-    Serial.println(F("SSD1306 allocation failed"));
+    Serial.println(F("[display] SSD1306 allocation failed"));
     for(;;);
   }
 
   // dht.begin();
-  Serial.println("Setup begin");
   mqttReconnectTimer = xTimerCreate("mqttTimer", pdMS_TO_TICKS(RECONNECT_DELAY_MS), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToMqtt));
   wifiReconnectTimer = xTimerCreate("wifiTimer", pdMS_TO_TICKS(RECONNECT_DELAY_MS), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToWifi));
 
@@ -125,13 +123,13 @@ void setup() {
   connectToWifi();
 
   if (!aht.begin()) {
-    Serial.println("Failed to find AHT10/AHT20 chip");
+    Serial.println(F("[sensors] failed to find AHT10/AHT20 chip"));
     while (1) {
       delay(10);
     }
   }
 
-  Serial.println("AHT10/AHT20 Found!");
+  Serial.println(F("[sensors] AHT10/AHT20 found"));
   aht_temp = aht.getTemperatureSensor();
   aht_temp->printSensorDetails();
 
@@ -142,13 +140,10 @@ void setup() {
   //status = bmp.begin(BMP280_ADDRESS_ALT, BMP280_CHIPID);
   status = bmp.begin(BMP280_I2C_ADDR);
   if (!status) {
-    Serial.println(F("Could not find a valid BMP280 sensor, check wiring or "
-                      "try a different address!"));
-    Serial.print("SensorID was: 0x"); Serial.println(bmp.sensorID(),16);
-    Serial.print("        ID of 0xFF probably means a bad address, a BMP 180 or BMP 085\n");
-    Serial.print("   ID of 0x56-0x58 represents a BMP 280,\n");
-    Serial.print("        ID of 0x60 represents a BME 280.\n");
-    Serial.print("        ID of 0x61 represents a BME 680.\n");
+    Serial.println(F("[sensors] BMP280 not found. Check the wiring and the address."));
+    Serial.printf("[sensors] sensorID was 0x%02X\n", bmp.sensorID());
+    Serial.println(F("          0xFF -> bad address, or a BMP180/BMP085"));
+    Serial.println(F("          0x56-0x58 -> BMP280, 0x60 -> BME280, 0x61 -> BME680"));
     while (1) delay(10);
   }
 }
@@ -160,20 +155,20 @@ void loop() {
 
     if (WiFi.status() == WL_CONNECTED) {
         long rssi = WiFi.RSSI();
-        Serial.print("Signal Strength (RSSI): ");
-        Serial.print(rssi);
-        Serial.println(" dBm");
-        
-        // Quick interpretation
-        if (rssi >= -60) Serial.println("-> Excellent connection!");
-        else if (rssi >= -75) Serial.println("-> OK, but starting to struggle.");
-        else Serial.println("-> Critical! Expect packet loss or drops.");
+        const char *quality;
+        if (rssi >= -60) {
+          quality = "excellent";
+        } else if (rssi >= -75) {
+          quality = "workable, starting to struggle";
+        } else {
+          quality = "critical, expect packet loss";
+        }
+        Serial.printf("[net] RSSI %ld dBm (%s)\n", rssi, quality);
     } else {
-        Serial.println("Connection lost!");
+        Serial.println("[net] Wi-Fi not connected");
     }
 
 
-    Serial.println("Starting sensor reading");
     // Save the last time a new reading was published
     previousMillis = currentMillis;
     // New DHT sensor readings
@@ -212,8 +207,7 @@ void loop() {
     // Publish an MQTT message on topic esp32/dht/temperature
     String topic = MQTT_TOPIC_PREFIX + deviceId + "/telemetry";
     uint16_t packetIdPub1 = mqttClient.publish(topic.c_str(), MQTT_QOS, false, payload);                            
-    Serial.printf("Publishing on topic %s at QoS 1, packetId: %i\n", topic.c_str(), packetIdPub1);
-    Serial.printf("Message: %.2f \n", temp_event.temperature);
+    Serial.printf("[net] published to %s (packetId %u): %s\n", topic.c_str(), packetIdPub1, payload);
       display.clearDisplay();
 
     display.setFont(&FreeSerif9pt7b);

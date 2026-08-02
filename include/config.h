@@ -8,6 +8,9 @@
 
 // --- Serial ---
 static const uint32_t SERIAL_BAUD = 115200;
+// USB CDC only enumerates a moment after boot, so without this wait the first
+// prints are lost. Bounded so a device running on external power never stalls here.
+static const uint32_t SERIAL_READY_TIMEOUT_MS = 2000;
 
 // --- Telemetry ---
 static const uint32_t PUBLISH_INTERVAL_MS = 60000;
