@@ -7,14 +7,13 @@ extern "C" {
   #include "freertos/timers.h"
 }
 #include <AsyncMqttClient.h>
-#include <Adafruit_AHTX0.h>
-#include <Adafruit_BMP280.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Wire.h>
 #include <Fonts/FreeSerif9pt7b.h>
 
 #include "config.h"
+#include "sensors.h"
 
 String deviceId = "";
 
@@ -23,14 +22,6 @@ TimerHandle_t mqttReconnectTimer;
 TimerHandle_t wifiReconnectTimer;
 
 unsigned long previousMillis = 0;   // Stores last time temperature was published
-
-
-Adafruit_AHTX0 aht;
-Adafruit_Sensor *aht_humidity, *aht_temp;
-
-Adafruit_BMP280 bmp; // use I2C interface
-Adafruit_Sensor *bmp_temp = bmp.getTemperatureSensor();
-Adafruit_Sensor *bmp_pressure = bmp.getPressureSensor();
 
 Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
 
@@ -105,7 +96,6 @@ void setup() {
     for(;;);
   }
 
-  // dht.begin();
   mqttReconnectTimer = xTimerCreate("mqttTimer", pdMS_TO_TICKS(RECONNECT_DELAY_MS), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToMqtt));
   wifiReconnectTimer = xTimerCreate("wifiTimer", pdMS_TO_TICKS(RECONNECT_DELAY_MS), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToWifi));
 
@@ -122,29 +112,11 @@ void setup() {
   //mqttClient.setCredentials("REPlACE_WITH_YOUR_USER", "REPLACE_WITH_YOUR_PASSWORD");
   connectToWifi();
 
-  if (!aht.begin()) {
-    Serial.println(F("[sensors] failed to find AHT10/AHT20 chip"));
+  if (!sensorsBegin()) {
+    Serial.println(F("[main] sensors unavailable, halting"));
     while (1) {
       delay(10);
     }
-  }
-
-  Serial.println(F("[sensors] AHT10/AHT20 found"));
-  aht_temp = aht.getTemperatureSensor();
-  aht_temp->printSensorDetails();
-
-  aht_humidity = aht.getHumiditySensor();
-  aht_humidity->printSensorDetails();
-
-  unsigned status;
-  //status = bmp.begin(BMP280_ADDRESS_ALT, BMP280_CHIPID);
-  status = bmp.begin(BMP280_I2C_ADDR);
-  if (!status) {
-    Serial.println(F("[sensors] BMP280 not found. Check the wiring and the address."));
-    Serial.printf("[sensors] sensorID was 0x%02X\n", bmp.sensorID());
-    Serial.println(F("          0xFF -> bad address, or a BMP180/BMP085"));
-    Serial.println(F("          0x56-0x58 -> BMP280, 0x60 -> BME280, 0x61 -> BME680"));
-    while (1) delay(10);
   }
 }
 
@@ -171,34 +143,15 @@ void loop() {
 
     // Save the last time a new reading was published
     previousMillis = currentMillis;
-    // New DHT sensor readings
-    // hum = dht.readHumidity();
-    // Read temperature as Celsius (the default)
-    // temp_event = dht.readTemperature();
-    // Read temperature as Fahrenheit (isFahrenheit = true)
-    //temp_event = dht.readTemperature(true);
 
-    // Check if any reads failed and exit early (to try again).
-    // if (isnan(temp_event) || isnan(hum)) {
-    //   Serial.println(F("Failed to read from DHT sensor!"));
-    //   Serial.println(temp_event);
-    //   Serial.println(hum);
-    //   return;
-    // }
-
-    sensors_event_t humidity_event;
-    sensors_event_t temp_event;
-    sensors_event_t pressure_event;
-    aht_humidity->getEvent(&humidity_event);
-    aht_temp->getEvent(&temp_event);
-    bmp_pressure->getEvent(&pressure_event);
+    Readings readings = sensorsRead();
 
     JsonDocument doc;
 
     // 2. Populate data - Ensure keys match your Python Pydantic model exactly
-    doc["temperature"] = temp_event.temperature;
-    doc["humidity"] = humidity_event.relative_humidity;
-    doc["pressure"] = pressure_event.pressure; // Use a real sensor value if available
+    doc["temperature"] = readings.temperatureC;
+    doc["humidity"] = readings.humidityPct;
+    doc["pressure"] = readings.pressureHPa;
 
     // 3. Serialize to a buffer
     char payload[128];
@@ -215,11 +168,11 @@ void loop() {
     display.setTextColor(WHITE);
     display.setCursor(0, 20);
     // Display static text
-    display.printf("Temp: %.2f", temp_event.temperature);
+    display.printf("Temp: %.2f", readings.temperatureC);
     display.setCursor(0, 40);
-    display.printf("Humidity: %.2f", humidity_event.relative_humidity);
+    display.printf("Humidity: %.2f", readings.humidityPct);
     display.setCursor(0, 60);
-    display.printf("Pressure: %.2f", pressure_event.pressure);
+    display.printf("Pressure: %.2f", readings.pressureHPa);
     display.display();
   }
 }
