@@ -113,10 +113,9 @@ void setup() {
   connectToWifi();
 
   if (!sensorsBegin()) {
-    Serial.println(F("[main] sensors unavailable, halting"));
-    while (1) {
-      delay(10);
-    }
+    Serial.println(F("[main] no sensors available, rebooting shortly"));
+    delay(NO_SENSOR_REBOOT_MS);
+    ESP.restart();
   }
 }
 
@@ -145,13 +144,22 @@ void loop() {
     previousMillis = currentMillis;
 
     Readings readings = sensorsRead();
+    if (!readings.any()) {
+      return;
+    }
 
     JsonDocument doc;
 
-    // 2. Populate data - Ensure keys match your Python Pydantic model exactly
-    doc["temperature"] = readings.temperatureC;
-    doc["humidity"] = readings.humidityPct;
-    doc["pressure"] = readings.pressureHPa;
+    // Key names are part of the contract with the consuming Pydantic model
+    if (readings.temperatureValid) {
+      doc["temperature"] = readings.temperatureC;
+    }
+    if (readings.humidityValid) {
+      doc["humidity"] = readings.humidityPct;
+    }
+    if (readings.pressureValid) {
+      doc["pressure"] = readings.pressureHPa;
+    }
 
     // 3. Serialize to a buffer
     char payload[128];

@@ -28,6 +28,10 @@ static const uint32_t RECONNECT_DELAY_MS = 2000;
 // 0x77 is the BMP280 default; some breakouts strap the alternate 0x76.
 static const uint8_t BMP280_I2C_ADDR = 0x77;
 
+// If every sensor fails to initialize there is nothing to report, so reboot
+// after showing the error rather than sitting there dark.
+static const uint32_t NO_SENSOR_REBOOT_MS = 60000;
+
 // --- Display ---
 static const uint8_t SSD1306_I2C_ADDR = 0x3C;
 static const uint8_t OLED_WIDTH = 128;
