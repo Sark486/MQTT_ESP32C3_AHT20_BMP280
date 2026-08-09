@@ -5,7 +5,7 @@
 #pragma once
 
 // A single sample set. Each field is only meaningful when its *Valid flag is set:
-// a missing sensor clears the flag.
+// a missing sensor or an implausible reading clears the flag.
 struct Readings {
   float temperatureC = 0.0f;
   float humidityPct = 0.0f;

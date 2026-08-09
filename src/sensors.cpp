@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <Adafruit_AHTX0.h>
 #include <Adafruit_BMP280.h>
+#include <math.h>
 
 #include "config.h"
 
@@ -19,6 +20,10 @@ Adafruit_Sensor *bmpPressure = nullptr;
 
 bool ahtReady = false;
 bool bmpReady = false;
+
+bool plausible(float value, float minValue, float maxValue) {
+  return !isnan(value) && value >= minValue && value <= maxValue;
+}
 
 bool beginAht() {
   if (!aht.begin()) {
@@ -69,10 +74,10 @@ Readings sensorsRead() {
     ahtHumidity->getEvent(&humidityEvent);
 
     sample.temperatureC = tempEvent.temperature;
-    sample.temperatureValid = true;
+    sample.temperatureValid = plausible(sample.temperatureC, TEMP_MIN_C, TEMP_MAX_C);
 
     sample.humidityPct = humidityEvent.relative_humidity;
-    sample.humidityValid = true;
+    sample.humidityValid = plausible(sample.humidityPct, HUMIDITY_MIN, HUMIDITY_MAX);
   }
 
   if (bmpReady) {
@@ -80,7 +85,7 @@ Readings sensorsRead() {
     bmpPressure->getEvent(&pressureEvent);
 
     sample.pressureHPa = pressureEvent.pressure;
-    sample.pressureValid = true;
+    sample.pressureValid = plausible(sample.pressureHPa, PRESSURE_MIN_H, PRESSURE_MAX_H);
   }
 
   if (!sample.any()) {

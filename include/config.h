@@ -28,6 +28,15 @@ static const uint32_t RECONNECT_DELAY_MS = 2000;
 // 0x77 is the BMP280 default; some breakouts strap the alternate 0x76.
 static const uint8_t BMP280_I2C_ADDR = 0x77;
 
+// Plausibility bounds. Readings outside these are treated as sensor faults and are
+// neither published nor displayed.
+static const float TEMP_MIN_C = -40.0f;
+static const float TEMP_MAX_C = 85.0f;
+static const float HUMIDITY_MIN = 0.0f;
+static const float HUMIDITY_MAX = 100.0f;
+static const float PRESSURE_MIN_H = 300.0f;
+static const float PRESSURE_MAX_H = 1100.0f;
+
 // If every sensor fails to initialize there is nothing to report, so reboot
 // after showing the error rather than sitting there dark.
 static const uint32_t NO_SENSOR_REBOOT_MS = 60000;
