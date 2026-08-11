@@ -7,13 +7,10 @@ extern "C" {
   #include "freertos/timers.h"
 }
 #include <AsyncMqttClient.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-#include <Wire.h>
-#include <Fonts/FreeSerif9pt7b.h>
 
 #include "config.h"
 #include "sensors.h"
+#include "display_ui.h"
 
 String deviceId = "";
 
@@ -22,8 +19,6 @@ TimerHandle_t mqttReconnectTimer;
 TimerHandle_t wifiReconnectTimer;
 
 unsigned long previousMillis = 0;   // Stores last time temperature was published
-
-Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
 
 void connectToWifi() {
   Serial.println(F("[net] connecting to Wi-Fi..."));
@@ -91,9 +86,8 @@ void setup() {
   Serial.println();
   Serial.println(F("[main] booting"));
 
-  if(!display.begin(SSD1306_SWITCHCAPVCC, SSD1306_I2C_ADDR)) {
-    Serial.println(F("[display] SSD1306 allocation failed"));
-    for(;;);
+  if (!displayBegin()) {
+    for (;;);
   }
 
   mqttReconnectTimer = xTimerCreate("mqttTimer", pdMS_TO_TICKS(RECONNECT_DELAY_MS), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToMqtt));
@@ -169,18 +163,7 @@ void loop() {
     String topic = MQTT_TOPIC_PREFIX + deviceId + "/telemetry";
     uint16_t packetIdPub1 = mqttClient.publish(topic.c_str(), MQTT_QOS, false, payload);                            
     Serial.printf("[net] published to %s (packetId %u): %s\n", topic.c_str(), packetIdPub1, payload);
-      display.clearDisplay();
 
-    display.setFont(&FreeSerif9pt7b);
-    display.setTextSize(1);
-    display.setTextColor(WHITE);
-    display.setCursor(0, 20);
-    // Display static text
-    display.printf("Temp: %.2f", readings.temperatureC);
-    display.setCursor(0, 40);
-    display.printf("Humidity: %.2f", readings.humidityPct);
-    display.setCursor(0, 60);
-    display.printf("Pressure: %.2f", readings.pressureHPa);
-    display.display();
+    displayShowReadings(readings);
   }
 }
