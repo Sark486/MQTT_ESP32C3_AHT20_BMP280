@@ -86,9 +86,17 @@ void setup() {
   Serial.println();
   Serial.println(F("[main] booting"));
 
-  if (!displayBegin()) {
-    for (;;);
+  displayBegin();
+  displayShowStatus("Booting...");
+
+  if (!sensorsBegin()) {
+    Serial.println(F("[main] no sensors available, rebooting shortly"));
+    displayShowStatus("No sensors!");
+    delay(NO_SENSOR_REBOOT_MS);
+    ESP.restart();
   }
+
+  displayShowStatus("Connecting...");
 
   mqttReconnectTimer = xTimerCreate("mqttTimer", pdMS_TO_TICKS(RECONNECT_DELAY_MS), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToMqtt));
   wifiReconnectTimer = xTimerCreate("wifiTimer", pdMS_TO_TICKS(RECONNECT_DELAY_MS), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToWifi));
@@ -105,12 +113,6 @@ void setup() {
   // If your broker requires authentication (username and password), set them below
   //mqttClient.setCredentials("REPlACE_WITH_YOUR_USER", "REPLACE_WITH_YOUR_PASSWORD");
   connectToWifi();
-
-  if (!sensorsBegin()) {
-    Serial.println(F("[main] no sensors available, rebooting shortly"));
-    delay(NO_SENSOR_REBOOT_MS);
-    ESP.restart();
-  }
 }
 
 void loop() {
@@ -138,6 +140,7 @@ void loop() {
     previousMillis = currentMillis;
 
     Readings readings = sensorsRead();
+    displayShowReadings(readings);  // renders "--" for invalid fields
     if (!readings.any()) {
       return;
     }
@@ -163,7 +166,5 @@ void loop() {
     String topic = MQTT_TOPIC_PREFIX + deviceId + "/telemetry";
     uint16_t packetIdPub1 = mqttClient.publish(topic.c_str(), MQTT_QOS, false, payload);                            
     Serial.printf("[net] published to %s (packetId %u): %s\n", topic.c_str(), packetIdPub1, payload);
-
-    displayShowReadings(readings);
   }
 }
