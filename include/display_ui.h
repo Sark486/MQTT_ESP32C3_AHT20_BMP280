@@ -1,7 +1,9 @@
-// SSD1306 OLED rendering.
+// SSD1306 OLED rendering, panel-agnostic.
 //
-// The display is optional: if it is absent every call here becomes a no-op and
-// the firmware carries on.
+// The panel is chosen at build time by the OLED_HEIGHT flag that platformio.ini
+// sets per environment (64 or 32); display_ui.cpp picks the matching font and
+// line positions. The display is optional: if it is absent every call here becomes
+// a no-op and the firmware carries on.
 #pragma once
 
 #include "sensors.h"

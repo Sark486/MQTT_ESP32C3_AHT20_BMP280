@@ -44,4 +44,4 @@ static const uint32_t NO_SENSOR_REBOOT_MS = 60000;
 // --- Display ---
 static const uint8_t SSD1306_I2C_ADDR = 0x3C;
 static const uint8_t OLED_WIDTH = 128;
-static const uint8_t OLED_HEIGHT = 64;
+// OLED_HEIGHT comes from platformio.ini, one value per build environment.

@@ -10,13 +10,42 @@
 
 namespace {
 
-Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
+// Everything that differs between the two panels.
+struct OledLayout {
+  uint8_t height;
+  const GFXfont *font;  // nullptr => built-in 5x7 font
+  uint8_t textSize;
+  int16_t lineY[3];  // cursor Y for each telemetry line
+  int16_t statusY;  // cursor Y for a single status message
+};
+
+#if OLED_HEIGHT == 64
+static const OledLayout LAYOUT = {
+    /* height */ 64,
+    /* font */ &FreeSerif9pt7b,
+    /* textSize */ 1,
+    /* lineY */ {20, 40, 60},
+    /* statusY */ 36,
+};
+#elif OLED_HEIGHT == 32
+static const OledLayout LAYOUT = {
+    /* height */ 32,
+    /* font */ nullptr,
+    /* textSize */ 1,
+    /* lineY */ {0, 11, 22},
+    /* statusY */ 12,
+};
+#else
+#error "Unsupported OLED_HEIGHT, expected 64 or 32"
+#endif
+
+Adafruit_SSD1306 display(OLED_WIDTH, LAYOUT.height, &Wire, -1);
 bool present = false;
 
 // The panel keeps its text style between frames, so this only runs at startup.
 void applyTextStyle() {
-  display.setFont(&FreeSerif9pt7b);
-  display.setTextSize(1);
+  display.setFont(LAYOUT.font);
+  display.setTextSize(LAYOUT.textSize);
   display.setTextColor(SSD1306_WHITE);
 }
 
@@ -43,7 +72,7 @@ void displayBegin() {
     return;
   }
 
-  Serial.printf("[display] SSD1306 %ux%u ready\n", OLED_WIDTH, OLED_HEIGHT);
+  Serial.printf("[display] SSD1306 %ux%u ready\n", OLED_WIDTH, LAYOUT.height);
   display.clearDisplay();
   applyTextStyle();
   display.display();
@@ -54,7 +83,7 @@ void displayShowStatus(const char *message) {
     return;
   }
   display.clearDisplay();
-  display.setCursor(0, 36);
+  display.setCursor(0, LAYOUT.statusY);
   display.print(message);
   display.display();
 }
@@ -65,9 +94,10 @@ void displayShowReadings(const Readings &readings) {
   }
   display.clearDisplay();
 
-  printReading(20, "Temp: ", readings.temperatureC, readings.temperatureValid, 2, " C");
-  printReading(40, "Hum: ", readings.humidityPct, readings.humidityValid, 1, " %");
-  printReading(60, "Press: ", readings.pressureHPa, readings.pressureValid, 0, " hPa");
+  // Labels are kept short so the longest line still fits 128 px in either font.
+  printReading(LAYOUT.lineY[0], "T  ", readings.temperatureC, readings.temperatureValid, 2, " C");
+  printReading(LAYOUT.lineY[1], "RH ", readings.humidityPct, readings.humidityValid, 1, " %");
+  printReading(LAYOUT.lineY[2], "P  ", readings.pressureHPa, readings.pressureValid, 0, " hPa");
 
   display.display();
 }
