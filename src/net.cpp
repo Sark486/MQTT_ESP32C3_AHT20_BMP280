@@ -36,6 +36,12 @@ void connectToMqtt() {
   mqttClient.connect();
 }
 
+// FreeRTOS passes the timer handle to its callback, so the signatures have to match.
+// The example I started from cast connectToWifi() straight into the callback type,
+// which works in practice but is undefined behavior.
+void onWifiTimer(TimerHandle_t) { connectToWifi(); }
+void onMqttTimer(TimerHandle_t) { connectToMqtt(); }
+
 void onWifiEvent(WiFiEvent_t event) {
   switch (event) {
     case ARDUINO_EVENT_WIFI_STA_GOT_IP:
@@ -75,10 +81,10 @@ void onMqttPublish(uint16_t packetId) {
 } // namespace
 
 void netBegin() {
-  wifiReconnectTimer = xTimerCreate("wifiTimer", pdMS_TO_TICKS(RECONNECT_DELAY_MS), pdFALSE,
-                                    (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToWifi));
-  mqttReconnectTimer = xTimerCreate("mqttTimer", pdMS_TO_TICKS(RECONNECT_DELAY_MS), pdFALSE,
-                                    (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToMqtt));
+  wifiReconnectTimer = xTimerCreate("wifiTimer", pdMS_TO_TICKS(RECONNECT_DELAY_MS),
+                                    pdFALSE, nullptr, onWifiTimer);
+  mqttReconnectTimer = xTimerCreate("mqttTimer", pdMS_TO_TICKS(RECONNECT_DELAY_MS),
+                                    pdFALSE, nullptr, onMqttTimer);
 
   WiFi.onEvent(onWifiEvent);
 
