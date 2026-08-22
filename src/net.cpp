@@ -20,6 +20,29 @@ TimerHandle_t mqttReconnectTimer = nullptr;
 String deviceId;
 String telemetryTopic;
 
+int wifiAttempts = 0;
+int mqttAttempts = 0;
+
+// Doubles the base delay per failed attempt, capped at RECONNECT_MAX_MS.
+uint32_t backoffMs(int attempts) {
+  uint32_t delayMs = RECONNECT_BASE_MS;
+  for (int i = 0; i < attempts; i++) {
+    delayMs *= 2;
+    if (delayMs >= RECONNECT_MAX_MS) {
+      return RECONNECT_MAX_MS;
+    }
+  }
+  return delayMs;
+}
+
+void scheduleRetry(TimerHandle_t timer, int &attempts) {
+  const uint32_t delayMs = backoffMs(attempts);
+  attempts++;
+  xTimerChangePeriod(timer, pdMS_TO_TICKS(delayMs), 0);
+  xTimerStart(timer, 0);
+  Serial.printf("[net] retrying in %u ms (attempt %d)\n", delayMs, attempts);
+}
+
 bool wifiConnected() {
   return WiFi.status() == WL_CONNECTED;
 }
@@ -45,6 +68,7 @@ void onMqttTimer(TimerHandle_t) { connectToMqtt(); }
 void onWifiEvent(WiFiEvent_t event) {
   switch (event) {
     case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+      wifiAttempts = 0;
       Serial.print(F("[net] Wi-Fi connected, IP address: "));
       Serial.println(WiFi.localIP());
       connectToMqtt();
@@ -54,7 +78,7 @@ void onWifiEvent(WiFiEvent_t event) {
       Serial.println(F("[net] Wi-Fi lost connection"));
       // Don't chase MQTT while the link itself is down.
       xTimerStop(mqttReconnectTimer, 0);
-      xTimerStart(wifiReconnectTimer, 0);
+      scheduleRetry(wifiReconnectTimer, wifiAttempts);
       break;
 
     default:
@@ -64,14 +88,17 @@ void onWifiEvent(WiFiEvent_t event) {
 }
 
 void onMqttConnect(bool sessionPresent) {
+  mqttAttempts = 0;
   Serial.printf("[net] connected to MQTT (session present: %d)\n", sessionPresent);
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
-  Serial.println(F("[net] disconnected from MQTT"));
-  if (wifiConnected()) {
-    xTimerStart(mqttReconnectTimer, 0);
+  Serial.printf("[net] disconnected from MQTT (reason: %d)\n", (int)reason);
+  if (!wifiConnected()) {
+    return;
   }
+
+  scheduleRetry(mqttReconnectTimer, mqttAttempts);
 }
 
 void onMqttPublish(uint16_t packetId) {
@@ -81,9 +108,9 @@ void onMqttPublish(uint16_t packetId) {
 } // namespace
 
 void netBegin() {
-  wifiReconnectTimer = xTimerCreate("wifiTimer", pdMS_TO_TICKS(RECONNECT_DELAY_MS),
+  wifiReconnectTimer = xTimerCreate("wifiTimer", pdMS_TO_TICKS(RECONNECT_BASE_MS),
                                     pdFALSE, nullptr, onWifiTimer);
-  mqttReconnectTimer = xTimerCreate("mqttTimer", pdMS_TO_TICKS(RECONNECT_DELAY_MS),
+  mqttReconnectTimer = xTimerCreate("mqttTimer", pdMS_TO_TICKS(RECONNECT_BASE_MS),
                                     pdFALSE, nullptr, onMqttTimer);
 
   WiFi.onEvent(onWifiEvent);
