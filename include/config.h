@@ -21,6 +21,8 @@ static const uint8_t MQTT_QOS = 1;
 // Reconnect backoff: RECONNECT_BASE_MS doubled per failed attempt, capped.
 static const uint32_t RECONNECT_BASE_MS = 2000;
 static const uint32_t RECONNECT_MAX_MS = 60000;
+// Give up and reboot after this long with no successful MQTT connection.
+static const uint32_t OFFLINE_REBOOT_MS = 5 * 60 * 1000;
 
 // My cheap ESP32-C3 mini browns out on TX power spikes. Lowering the TX power keeps
 // it stable; a better board works at full power without this.

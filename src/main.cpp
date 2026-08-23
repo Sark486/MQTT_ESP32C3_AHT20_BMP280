@@ -75,6 +75,8 @@ void setup() {
 }
 
 void loop() {
+  netLoop();
+
   uint32_t now = millis();
   if (!firstPublish && now - lastPublishMs < PUBLISH_INTERVAL_MS) {
     delay(10);  // yield instead of spinning between publishes

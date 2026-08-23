@@ -22,6 +22,7 @@ String telemetryTopic;
 
 int wifiAttempts = 0;
 int mqttAttempts = 0;
+uint32_t lastMqttConnectMs = 0;
 
 // Doubles the base delay per failed attempt, capped at RECONNECT_MAX_MS.
 uint32_t backoffMs(int attempts) {
@@ -89,6 +90,7 @@ void onWifiEvent(WiFiEvent_t event) {
 
 void onMqttConnect(bool sessionPresent) {
   mqttAttempts = 0;
+  lastMqttConnectMs = millis();
   Serial.printf("[net] connected to MQTT (session present: %d)\n", sessionPresent);
 }
 
@@ -125,7 +127,20 @@ void netBegin() {
   mqttClient.onPublish(onMqttPublish);
   mqttClient.setServer(SECRET_MQTT_HOST, SECRET_MQTT_PORT);
 
+  lastMqttConnectMs = millis();
   connectToWifi();
+}
+
+void netLoop() {
+  if (mqttClient.connected()) {
+    lastMqttConnectMs = millis();
+    return;
+  }
+  if (millis() - lastMqttConnectMs >= OFFLINE_REBOOT_MS) {
+    Serial.println(F("[net] offline too long, rebooting"));
+    Serial.flush();
+    ESP.restart();
+  }
 }
 
 void netPublishTelemetry(const char *payload) {
