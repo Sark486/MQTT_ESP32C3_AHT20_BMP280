@@ -100,6 +100,16 @@ void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
     return;
   }
 
+  if (mqttAttempts >= MQTT_BOUNCE_WIFI_AFTER_ATTEMPTS) {
+    // Wi-Fi says it is up but MQTT still gets nothing back, so the TCP stack is
+    // probably stuck. Turning the radio off and on again clears it, and the
+    // ARDUINO_EVENT_WIFI_STA_DISCONNECTED handler then reconnects as usual.
+    Serial.println(F("[net] MQTT unreachable despite Wi-Fi being up, bouncing Wi-Fi"));
+    mqttAttempts = 0;
+    WiFi.disconnect(true);  // true = power the radio down too
+    return;
+  }
+
   scheduleRetry(mqttReconnectTimer, mqttAttempts);
 }
 
