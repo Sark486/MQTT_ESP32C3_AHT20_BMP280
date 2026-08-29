@@ -17,8 +17,11 @@ AsyncMqttClient mqttClient;
 TimerHandle_t wifiReconnectTimer = nullptr;
 TimerHandle_t mqttReconnectTimer = nullptr;
 
-String deviceId;
-String telemetryTopic;
+// AsyncMqttClient keeps the pointers it is given instead of copying the strings,
+// so these buffers have to outlive every connection. I lost an evening to this
+// with String.
+char deviceId[18] = {0};  // 17 chars of MAC plus the NUL
+char telemetryTopic[64] = {0};
 
 int wifiAttempts = 0;
 int mqttAttempts = 0;
@@ -117,6 +120,15 @@ void onMqttPublish(uint16_t packetId) {
   Serial.printf("[net] publish acknowledged, packetId: %u\n", packetId);
 }
 
+void buildIdentity() {
+  const String mac = WiFi.macAddress();  // "AA:BB:CC:DD:EE:FF"
+  snprintf(deviceId, sizeof(deviceId), "%s", mac.c_str());
+  snprintf(telemetryTopic, sizeof(telemetryTopic), "%s%s/telemetry", MQTT_TOPIC_PREFIX, deviceId);
+
+  Serial.printf("[net] device id: %s\n", deviceId);
+  Serial.printf("[net] telemetry topic: %s\n", telemetryTopic);
+}
+
 } // namespace
 
 void netBegin() {
@@ -126,11 +138,7 @@ void netBegin() {
                                     pdFALSE, nullptr, onMqttTimer);
 
   WiFi.onEvent(onWifiEvent);
-
-  deviceId = WiFi.macAddress();
-  telemetryTopic = MQTT_TOPIC_PREFIX + deviceId + "/telemetry";
-  Serial.printf("[net] device id: %s\n", deviceId.c_str());
-  Serial.printf("[net] telemetry topic: %s\n", telemetryTopic.c_str());
+  buildIdentity();
 
   mqttClient.onConnect(onMqttConnect);
   mqttClient.onDisconnect(onMqttDisconnect);
@@ -154,8 +162,8 @@ void netLoop() {
 }
 
 void netPublishTelemetry(const char *payload) {
-  const uint16_t packetId = mqttClient.publish(telemetryTopic.c_str(), MQTT_QOS, false, payload);
-  Serial.printf("[net] published to %s (packetId %u): %s\n", telemetryTopic.c_str(), packetId, payload);
+  const uint16_t packetId = mqttClient.publish(telemetryTopic, MQTT_QOS, false, payload);
+  Serial.printf("[net] published to %s (packetId %u): %s\n", telemetryTopic, packetId, payload);
 }
 
 void netLogSignalQuality() {
