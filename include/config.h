@@ -16,6 +16,7 @@ static const uint32_t SERIAL_READY_TIMEOUT_MS = 2000;
 static const uint32_t PUBLISH_INTERVAL_MS = 60000;
 static const char MQTT_TOPIC_PREFIX[] = "sentinel/devices/";
 static const uint8_t MQTT_QOS = 1;
+static const uint16_t MQTT_KEEPALIVE_S = 30;
 
 // --- Networking ---
 // Reconnect backoff: RECONNECT_BASE_MS doubled per failed attempt, capped.

@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <AsyncMqttClient.h>
+#include <string.h>
 
 extern "C" {
 #include "freertos/FreeRTOS.h"
@@ -21,6 +22,7 @@ TimerHandle_t mqttReconnectTimer = nullptr;
 // so these buffers have to outlive every connection. I lost an evening to this
 // with String.
 char deviceId[18] = {0};  // 17 chars of MAC plus the NUL
+char clientId[32] = {0};
 char telemetryTopic[64] = {0};
 
 int wifiAttempts = 0;
@@ -123,10 +125,30 @@ void onMqttPublish(uint16_t packetId) {
 void buildIdentity() {
   const String mac = WiFi.macAddress();  // "AA:BB:CC:DD:EE:FF"
   snprintf(deviceId, sizeof(deviceId), "%s", mac.c_str());
+
+  snprintf(clientId, sizeof(clientId), "esp32c3-%s", deviceId);
   snprintf(telemetryTopic, sizeof(telemetryTopic), "%s%s/telemetry", MQTT_TOPIC_PREFIX, deviceId);
 
   Serial.printf("[net] device id: %s\n", deviceId);
   Serial.printf("[net] telemetry topic: %s\n", telemetryTopic);
+}
+
+void configureBroker() {
+  // Accept either a dotted-quad IP or a hostname in SECRET_MQTT_HOST.
+  IPAddress brokerIp;
+  if (brokerIp.fromString(SECRET_MQTT_HOST)) {
+    mqttClient.setServer(brokerIp, SECRET_MQTT_PORT);
+  } else {
+    mqttClient.setServer(SECRET_MQTT_HOST, SECRET_MQTT_PORT);
+  }
+  Serial.printf("[net] broker: %s:%d\n", SECRET_MQTT_HOST, SECRET_MQTT_PORT);
+
+  mqttClient.setClientId(clientId);
+  mqttClient.setKeepAlive(MQTT_KEEPALIVE_S);
+
+  if (strlen(SECRET_MQTT_USER) > 0) {
+    mqttClient.setCredentials(SECRET_MQTT_USER, SECRET_MQTT_PASSWORD);
+  }
 }
 
 } // namespace
@@ -143,7 +165,7 @@ void netBegin() {
   mqttClient.onConnect(onMqttConnect);
   mqttClient.onDisconnect(onMqttDisconnect);
   mqttClient.onPublish(onMqttPublish);
-  mqttClient.setServer(SECRET_MQTT_HOST, SECRET_MQTT_PORT);
+  configureBroker();
 
   lastMqttConnectMs = millis();
   connectToWifi();
