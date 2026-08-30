@@ -48,8 +48,12 @@ void publishReadings(const Readings &readings) {
     doc["pressure"] = readings.pressureHPa;
   }
 
-  char payload[128];
-  serializeJson(doc, payload);
+  char payload[TELEMETRY_PAYLOAD_MAX];
+  const size_t written = serializeJson(doc, payload, sizeof(payload));
+  if (written == 0) {
+    Serial.println(F("[main] payload did not fit the buffer, skipping publish"));
+    return;
+  }
 
   netPublishTelemetry(payload);
 }

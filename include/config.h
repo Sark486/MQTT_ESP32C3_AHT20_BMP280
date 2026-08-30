@@ -17,6 +17,7 @@ static const uint32_t PUBLISH_INTERVAL_MS = 60000;
 static const char MQTT_TOPIC_PREFIX[] = "sentinel/devices/";
 static const uint8_t MQTT_QOS = 1;
 static const uint16_t MQTT_KEEPALIVE_S = 30;
+static const int TELEMETRY_PAYLOAD_MAX = 192;
 
 // --- Networking ---
 // Reconnect backoff: RECONNECT_BASE_MS doubled per failed attempt, capped.

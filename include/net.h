@@ -12,8 +12,9 @@ void netBegin();
 // Call once per main-loop iteration; drives the stay-offline reboot watchdog.
 void netLoop();
 
-// Publishes to the telemetry topic.
-void netPublishTelemetry(const char *payload);
+// Publishes to the telemetry topic. Returns false when not connected or when
+// the broker client could not queue the message.
+bool netPublishTelemetry(const char *payload);
 
 // Logs RSSI with a plain-language interpretation.
 void netLogSignalQuality();

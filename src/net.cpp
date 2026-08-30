@@ -183,9 +183,22 @@ void netLoop() {
   }
 }
 
-void netPublishTelemetry(const char *payload) {
+bool netPublishTelemetry(const char *payload) {
+  if (!mqttClient.connected()) {
+    Serial.println(F("[net] not connected, dropping telemetry"));
+    return false;
+  }
+
   const uint16_t packetId = mqttClient.publish(telemetryTopic, MQTT_QOS, false, payload);
+  if (packetId == 0) {
+    // QoS > 0 always yields a non-zero packet id, so 0 means the message was
+    // rejected (out of buffer space or the link died mid-call).
+    Serial.println(F("[net] publish failed to queue"));
+    return false;
+  }
+
   Serial.printf("[net] published to %s (packetId %u): %s\n", telemetryTopic, packetId, payload);
+  return true;
 }
 
 void netLogSignalQuality() {
