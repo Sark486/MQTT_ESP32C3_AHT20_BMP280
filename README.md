@@ -1,4 +1,4 @@
-# ESP32-C3 environment sensor
+# SentinelEdge - ESP32-C3 sensor node
 
 A small MQTT sensor node. An ESP32-C3 reads temperature and humidity from an AHT20
 and pressure from a BMP280, publishes them as JSON once a minute, and shows the
@@ -8,7 +8,21 @@ It is meant to be always on: Wi-Fi and MQTT are handled with events and
 FreeRTOS timers rather than blocking calls, reconnects back off exponentially, and the
 device reboots itself if it stays offline long enough that something is clearly wrong.
 
+## System overview
+
+SentinelEdge is a home environment monitoring system in two parts:
+
+- **[sentineledge](https://github.com/Sark486/sentineledge)** - Raspberry Pi gateway.
+  FastAPI backend ingesting MQTT telemetry into TimescaleDB, a React dashboard, and a
+  camera agent.
+- **sentineledge-firmware** (this repo) - ESP32-C3 sensor nodes in C++.
+
+Nodes publish to `sentinel/devices/<hardware_id>/telemetry`; the gateway ingests,
+stores and serves that data.
+
 ## Hardware
+
+![ESP32-C3 node with AHT20, BMP280 and SSD1306 OLED](docs/images/hardware.jpg)
 
 | Part | Notes |
 | --- | --- |
@@ -106,4 +120,20 @@ being decided at runtime on a device that will only ever have one panel.
 The first version of this was a [Random Nerd Tutorials](https://randomnerdtutorials.com/esp32-mqtt-publish-bme680-arduino/)
 MQTT example for the ESP32, which is also where the AsyncMqttClient ZIP came from. The
 async client setup and the FreeRTOS reconnect timers still follow the shape their example
-taught me. Everything else has moved on since.
+taught me. Everything else has moved on since:
+
+- The reconnect timers back off exponentially instead of retrying every two seconds,
+  bounce Wi-Fi when MQTT stays unreachable while the link is up, and reboot the device
+  after five minutes with no connection.
+- The timer callbacks take a `TimerHandle_t` instead of being `reinterpret_cast` into
+  the right shape, which is what the example does.
+- Credentials moved out of `#define`s at the top of `main.cpp` into a gitignored
+  `secrets.h`, and the rest of the magic numbers into `config.h`.
+- The single `main.cpp` was split into `net.cpp`, `sensors.cpp` and `display_ui.cpp`.
+- A missing sensor or a missing OLED no longer parks the device in `while (1)`. It runs
+  with whatever it has, and readings outside realistic bounds are dropped instead of
+  published.
+- Publishing checks that the message actually queued, and the topic and client id live
+  in buffers that outlive the MQTT client rather than in `String`s.
+- Panel size is a build flag picked per environment, not a `#define` you edit and
+  recompile.
